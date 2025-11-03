@@ -4,19 +4,28 @@
 		<title>three.js webgpu - materials</title>
 		<meta charset="utf-8">
 		<meta name="viewport" content="width=device-width, user-scalable=no, minimum-scale=1.0, maximum-scale=1.0">
-		<link type="text/css" rel="stylesheet" href="main.css">
+		<link type="text/css" rel="stylesheet" href="example.css">
 	</head>
 	<body>
 
 		<div id="info">
-			<a href="https://threejs.org" target="_blank" rel="noopener">three.js</a> webgpu - materials
+			<a href="https://threejs.org/" target="_blank" rel="noopener" class="logo-link"></a>
+
+			<div class="title-wrapper">
+				<a href="https://threejs.org/" target="_blank" rel="noopener">three.js</a><span>Materials</span>
+			</div>
+
+			<small>
+				Examples of built-in materials and NodeMaterials.
+			</small>
 		</div>
 
 		<script type="importmap">
 			{
 				"imports": {
 					"three": "../build/three.webgpu.js",
-					"three/tsl": "../build/three.webgpu.js",
+					"three/webgpu": "../build/three.webgpu.js",
+					"three/tsl": "../build/three.tsl.js",
 					"three/addons/": "./jsm/"
 				}
 			}
@@ -24,14 +33,15 @@
 
 		<script type="module">
 
-			import * as THREE from 'three';
-			import { tslFn, wgslFn, positionLocal, positionWorld, normalLocal, normalWorld, normalView, color, texture, uv, float, vec2, vec3, vec4, oscSine, triplanarTexture, viewportBottomLeft, js, string, global, loop } from 'three/tsl';
+			import * as THREE from 'three/webgpu';
+			import * as TSL from 'three/tsl';
+
+			import { Fn, wgslFn, positionLocal, scriptable, positionWorld, normalLocal, normalWorld, normalView, color, texture, uv, float, vec2, vec3, vec4, oscSine, triplanarTexture, screenUV, js, string, Loop, cameraProjectionMatrix, ScriptableNodeResources } from 'three/tsl';
 
 			import { TeapotGeometry } from 'three/addons/geometries/TeapotGeometry.js';
+			import WebGPU from 'three/addons/capabilities/WebGPU.js';
 
-			import Stats from 'three/addons/libs/stats.module.js';
-
-			let stats;
+			import { Inspector } from 'three/addons/inspector/Inspector.js';
 
 			let camera, scene, renderer;
 
@@ -40,6 +50,14 @@
 			init();
 
 			function init() {
+
+				if ( WebGPU.isAvailable() === false ) {
+
+					document.body.appendChild( WebGPU.getErrorMessage() );
+
+					throw new Error( 'No WebGPU support' );
+
+				}
 
 				const container = document.createElement( 'div' );
 				document.body.appendChild( container );
@@ -117,6 +135,12 @@
 				material.alphaTestNode = 0.5;
 				materials.push( material );
 
+				// camera
+				material = new THREE.MeshBasicNodeMaterial();
+				material.colorNode = cameraProjectionMatrix.mul( positionLocal );
+				materials.push( material );
+
+
 				// Normal
 				material = new THREE.MeshNormalMaterial();
 				material.opacity = .5;
@@ -129,7 +153,7 @@
 
 				// Custom ShaderNode ( desaturate filter )
 
-				const desaturateShaderNode = tslFn( ( input ) => {
+				const desaturateShaderNode = Fn( ( input ) => {
 
 					return vec3( 0.299, 0.587, 0.114 ).dot( input.color.xyz );
 
@@ -141,7 +165,7 @@
 
 				// Custom ShaderNode(no inputs) > Approach 2
 
-				const desaturateNoInputsShaderNode = tslFn( () => {
+				const desaturateNoInputsShaderNode = Fn( () => {
 
 					return vec3( 0.299, 0.587, 0.114 ).dot( texture( uvTexture ).xyz );
 
@@ -177,7 +201,7 @@
 				material.colorNode = someWGSLFn( { color: texture( uvTexture ) } );
 				materials.push( material );
 
-				// Custom WGSL ( get texture from keywords )
+				// Custom WGSL
 
 				const getWGSLTextureSample = wgslFn( `
 					fn getWGSLTextureSample( tex: texture_2d<f32>, tex_sampler: sampler, uv:vec2<f32> ) -> vec4<f32> {
@@ -188,7 +212,6 @@
 				` );
 
 				const textureNode = texture( uvTexture );
-				//getWGSLTextureSample.keywords = { tex: textureNode, tex_sampler: sampler( textureNode ) };
 
 				material = new THREE.MeshBasicNodeMaterial();
 				material.colorNode = getWGSLTextureSample( { tex: textureNode, tex_sampler: textureNode, uv: uv() } );
@@ -201,7 +224,7 @@
 
 				// Screen Projection Texture
 				material = new THREE.MeshBasicNodeMaterial();
-				material.colorNode = texture( uvTexture, viewportBottomLeft );
+				material.colorNode = texture( uvTexture, screenUV.flipY() );
 				materials.push( material );
 
 				// Loop
@@ -209,9 +232,9 @@
 				materials.push( material );
 
 				const loopCount = 10;
-				material.colorNode = loop( loopCount, ( { i } ) => {
+				material.colorNode = Loop( loopCount, ( { i } ) => {
 
-					const output = vec4().temp();
+					const output = vec4().toVar();
 					const scale = oscSine().mul( .09 ); // just a value to test
 
 					const scaleI = scale.mul( i );
@@ -233,10 +256,9 @@
 
 				// Scriptable
 
-				global.set( 'THREE', THREE );
-				global.set( 'TSL', THREE );
+				ScriptableNodeResources.set( 'TSL', TSL );
 
-				const asyncNode = js( `
+				const asyncNode = scriptable( js( `
 
 					layout = {
 						outputType: 'node'
@@ -268,9 +290,9 @@
 
 					}
 
-				` ).scriptable();
+				` ) );
 
-				const scriptableNode = js( `
+				const scriptableNode = scriptable( js( `
 
 					layout = {
 						outputType: 'node',
@@ -320,7 +342,7 @@
 
 					output = { helloWorld };
 
-				` ).scriptable();
+				` ) );
 
 				scriptableNode.setParameter( 'source', texture( uvTexture ).xyz );
 				scriptableNode.setParameter( 'contrast', asyncNode );
@@ -357,12 +379,8 @@
 				renderer.setPixelRatio( window.devicePixelRatio );
 				renderer.setSize( window.innerWidth, window.innerHeight );
 				renderer.setAnimationLoop( animate );
+				renderer.inspector = new Inspector();
 				container.appendChild( renderer.domElement );
-
-				//
-
-				stats = new Stats();
-				container.appendChild( stats.dom );
 
 				//
 
@@ -391,24 +409,44 @@
 
 			}
 
+			function moduleToLib( module ) {
+
+				const lib = {};
+
+				for ( const nodeElement of Object.values( module ) ) {
+
+					if ( typeof nodeElement === 'function' && nodeElement.type !== undefined ) {
+
+						lib[ nodeElement.type ] = nodeElement;
+
+					}
+
+				}
+
+				return lib;
+
+			}
+
 			function testSerialization( mesh ) {
 
 				const json = mesh.toJSON();
-				const loader = new THREE.NodeObjectLoader();
-				const serializedMesh = loader.parse( json );
+				const loader = new THREE.NodeObjectLoader().setNodes( moduleToLib( THREE ) ).setNodeMaterials( moduleToLib( THREE ) );
+				const serializedMesh = loader.parse( json, () => {
 
-				serializedMesh.position.x = ( objects.length % 4 ) * 200 - 400;
-				serializedMesh.position.z = Math.floor( objects.length / 4 ) * 200 - 200;
+					serializedMesh.position.x = ( objects.length % 4 ) * 200 - 400;
+					serializedMesh.position.z = Math.floor( objects.length / 4 ) * 200 - 200;
 
-				const scriptableNode = serializedMesh.material.colorNode;
+					const scriptableNode = serializedMesh.material.colorNode;
 
-				// it's because local.get( 'material' ) is used in the example ( local/global is unserializable )
-				scriptableNode.setLocal( 'material', serializedMesh.material );
-				scriptableNode.setParameter( 'execFrom', 'serialized' );
+					// it's because local.get( 'material' ) is used in the example ( local/global is unserializable )
+					scriptableNode.setLocal( 'material', serializedMesh.material );
+					scriptableNode.setParameter( 'execFrom', 'serialized' );
 
-				objects.push( serializedMesh );
+					objects.push( serializedMesh );
 
-				scene.add( serializedMesh );
+					scene.add( serializedMesh );
+
+				} );
 
 			}
 
@@ -442,8 +480,6 @@
 				}
 
 				renderer.render( scene, camera );
-
-				stats.update();
 
 			}
 

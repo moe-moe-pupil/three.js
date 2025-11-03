@@ -4,20 +4,28 @@
 		<title>three.js webgpu - mrt</title>
 		<meta charset="utf-8">
 		<meta name="viewport" content="width=device-width, user-scalable=no, minimum-scale=1.0, maximum-scale=1.0">
-		<link type="text/css" rel="stylesheet" href="main.css">
+		<link type="text/css" rel="stylesheet" href="example.css">
 	</head>
 	<body>
 
 		<div id="info">
-			<a href="https://threejs.org" target="_blank" rel="noopener">three.js</a> webgpu - mrt<br />
-			Final / Beauty / Normal / Emissive / Diffuse
+			<a href="https://threejs.org/" target="_blank" rel="noopener" class="logo-link"></a>
+
+			<div class="title-wrapper">
+				<a href="https://threejs.org/" target="_blank" rel="noopener">three.js</a><span>Multiple Render Targets (MRT)</span>
+			</div>
+
+			<small>
+				Final / Beauty / Normal / Emissive / Diffuse
+			</small>
 		</div>
 
 		<script type="importmap">
 			{
 				"imports": {
 					"three": "../build/three.webgpu.js",
-					"three/tsl": "../build/three.webgpu.js",
+					"three/webgpu": "../build/three.webgpu.js",
+					"three/tsl": "../build/three.tsl.js",
 					"three/addons/": "./jsm/"
 				}
 			}
@@ -25,10 +33,12 @@
 
 		<script type="module">
 
-			import * as THREE from 'three';
-			import { output, transformedNormalWorld, pass, step, diffuseColor, emissive, viewportTopLeft, mix, mrt, tslFn } from 'three/tsl';
+			import * as THREE from 'three/webgpu';
+			import { output, normalView, pass, step, diffuseColor, emissive, directionToColor, screenUV, mix, mrt, Fn } from 'three/tsl';
 
-			import { RGBELoader } from 'three/addons/loaders/RGBELoader.js';
+			import { Inspector } from 'three/addons/inspector/Inspector.js';
+
+			import { HDRLoader } from 'three/addons/loaders/HDRLoader.js';
 
 			import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 			import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
@@ -50,7 +60,7 @@
 
 				scene = new THREE.Scene();
 
-				new RGBELoader()
+				new HDRLoader()
 					.setPath( 'textures/equirectangular/' )
 					.load( 'royal_esplanade_1k.hdr', function ( texture ) {
 
@@ -77,6 +87,7 @@
 				renderer.setSize( window.innerWidth, window.innerHeight );
 				renderer.setAnimationLoop( render );
 				renderer.toneMapping = THREE.ACESFilmicToneMapping;
+				renderer.inspector = new Inspector();
 				container.appendChild( renderer.domElement );
 
 				// post processing
@@ -84,7 +95,7 @@
 				const scenePass = pass( scene, camera, { minFilter: THREE.NearestFilter, magFilter: THREE.NearestFilter } );
 				scenePass.setMRT( mrt( {
 					output: output,
-					normal: transformedNormalWorld.directionToColor(),
+					normal: directionToColor( normalView ),
 					diffuse: diffuseColor,
 					emissive: emissive
 				} ) );
@@ -101,17 +112,17 @@
 
 				postProcessing = new THREE.PostProcessing( renderer );
 				postProcessing.outputColorTransform = false;
-				postProcessing.outputNode = tslFn( () => {
+				postProcessing.outputNode = Fn( () => {
 
 					const output = scenePass.getTextureNode( 'output' ); // output name is optional here
 					const normal = scenePass.getTextureNode( 'normal' );
 					const diffuse = scenePass.getTextureNode( 'diffuse' );
 					const emissive = scenePass.getTextureNode( 'emissive' );
 
-					const out = mix( output.renderOutput(), output, step( 0.2, viewportTopLeft.x ) );
-					const nor = mix( out, normal, step( 0.4, viewportTopLeft.x ) );
-					const emi = mix( nor, emissive, step( 0.6, viewportTopLeft.x ) );
-					const dif = mix( emi, diffuse, step( 0.8, viewportTopLeft.x ) );
+					const out = mix( output.renderOutput(), output, step( 0.2, screenUV.x ) );
+					const nor = mix( out, normal, step( 0.4, screenUV.x ) );
+					const emi = mix( nor, emissive, step( 0.6, screenUV.x ) );
+					const dif = mix( emi, diffuse, step( 0.8, screenUV.x ) );
 
 					return dif;
 

@@ -196,30 +196,6 @@ Editor.prototype = {
 
 	},
 
-	moveObject: function ( object, parent, before ) {
-
-		if ( parent === undefined ) {
-
-			parent = this.scene;
-
-		}
-
-		parent.add( object );
-
-		// sort children array
-
-		if ( before !== undefined ) {
-
-			var index = parent.children.indexOf( before );
-			parent.children.splice( index, 0, object );
-			parent.children.pop();
-
-		}
-
-		this.signals.sceneGraphChanged.dispatch();
-
-	},
-
 	nameObject: function ( object, name ) {
 
 		object.name = name;
@@ -678,7 +654,8 @@ Editor.prototype = {
 
 		this.setScene( await loader.parseAsync( json.scene ) );
 
-		if ( json.environment === 'ModelViewer' ) {
+		if ( json.environment === 'Room' ||
+			 json.environment === 'ModelViewer' /* DEPRECATED */ ) {
 
 			this.signals.sceneEnvironmentChanged.dispatch( json.environment );
 			this.signals.refreshSidebarEnvironment.dispatch();
@@ -706,13 +683,13 @@ Editor.prototype = {
 
 		}
 
-		// honor modelviewer environment
+		// honor neutral environment
 
 		let environment = null;
 
 		if ( this.scene.environment !== null && this.scene.environment.isRenderTargetTexture === true ) {
 
-			environment = 'ModelViewer';
+			environment = 'Room';
 
 		}
 
