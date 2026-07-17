@@ -508,18 +508,28 @@
 				let src;
 				if ( subHash >= 0 ) {
 
-					const beforeSubHash = splitHash[ 0 ].slice( 0, subHash );
+					const beforeSubHash = sanitizePagePath( splitHash[ 0 ].slice( 0, subHash ) );
 					const afterSubHash = splitHash[ 0 ].slice( subHash );
-					src = `${beforeSubHash}.html${afterSubHash}${splitHash[ 1 ]}`;
+					src = beforeSubHash ? `${beforeSubHash}.html${afterSubHash}${splitHash[ 1 ]}` : '';
 		
 				} else {
 
-					src = splitHash[ 0 ] + '.html' + splitHash[ 1 ];
+					const safePagePath = sanitizePagePath( splitHash[ 0 ] );
+					src = safePagePath ? safePagePath + '.html' + splitHash[ 1 ] : '';
 		
 				}
 
-				iframe.src = src; // lgtm[js/client-side-unvalidated-url-redirection]
-				iframe.style.display = 'unset';
+				if ( src ) {
+
+					iframe.src = src; // lgtm[js/client-side-unvalidated-url-redirection]
+					iframe.style.display = 'unset';
+
+				} else {
+
+					iframe.src = '';
+					iframe.style.display = 'none';
+
+				}
 
 			} else {
 
@@ -529,6 +539,15 @@
 			}
 
 			document.body.replaceChild( iframe, oldIframe );
+
+		}
+
+		function sanitizePagePath( pagePath ) {
+
+			// Allow only expected manual page path characters.
+			// Prevents injecting arbitrary URL schemes or special characters.
+			if ( ! pagePath ) return '';
+			return /^[A-Za-z0-9_/-]+$/.test( pagePath ) ? pagePath : '';
 
 		}
 
